@@ -39,26 +39,11 @@ usermod -aG dialout "${SERVICE_USER}"
 python3 -m venv "${APP_ROOT}/orangepi/.venv"
 "${APP_ROOT}/orangepi/.venv/bin/python" -m pip install -r "${APP_ROOT}/orangepi/requirements.txt"
 
-if [[ ! -t 0 ]]; then
-  echo "Ejecuta este instalador en una terminal interactiva para introducir el token de Cloud Run." >&2
-  exit 1
-fi
-printf 'Pega el DEVICE_TOKEN de Secret Manager (no se mostrará): '
-IFS= read -r -s DEVICE_TOKEN
-printf '\n'
-if [[ ! "${DEVICE_TOKEN}" =~ ^[[:xdigit:]]{64}$ ]]; then
-  unset DEVICE_TOKEN
-  echo "El token debe tener 64 caracteres hexadecimales (openssl rand -hex 32)." >&2
-  exit 1
-fi
-
 install -d -m 0755 /etc/default
 umask 077
-printf 'CLOUD_RUN_URL=%s\nDEVICE_TOKEN=%s\n' \
-  "${DEFAULT_CLOUD_RUN_URL}" "${DEVICE_TOKEN}" > "${ENV_FILE}"
+printf 'CLOUD_RUN_URL=%s\n' "${DEFAULT_CLOUD_RUN_URL}" > "${ENV_FILE}"
 chown root:root "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
-unset DEVICE_TOKEN
 
 cat > "${SERVICE_FILE}" <<UNIT
 [Unit]

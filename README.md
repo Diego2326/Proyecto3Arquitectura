@@ -34,18 +34,14 @@ El umbral inicial es 15 cm. Arduino envía por USB `STATE,ángulo,distancia_cm,u
 
 ## Desplegar el servicio en Google Cloud Run
 
-Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura `gcloud` con ese proyecto. Genera un secreto compartido, por ejemplo con `openssl rand -hex 32`, y guárdalo en Secret Manager. Desde la raíz del repositorio, crea el secreto y despliega:
+Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura `gcloud` con ese proyecto. Desde la raíz del repositorio, despliega:
 
 ```sh
-printf '%s' 'PEGA_AQUI_EL_SECRETO' | gcloud secrets create iot-device-token --data-file=-
 gcloud run deploy proyecto3arquitectura --source . --region northamerica-south1 \
-  --allow-unauthenticated --max 1 --min 0 --timeout=3600 \
-  --set-secrets DEVICE_TOKEN=iot-device-token:latest
+  --allow-unauthenticated --max 1 --min 0 --timeout=3600
 ```
 
-Para iniciar el servidor localmente, ejecuta `npm start` desde la raíz del repositorio y configura `DEVICE_TOKEN`.
-
-Si el secreto ya existe, crea una versión nueva con `gcloud secrets versions add iot-device-token --data-file=-`. Asegura que la cuenta de servicio de Cloud Run pueda leerlo (`Secret Manager Secret Accessor`). Anota la URL HTTPS que muestra `gcloud run deploy`; el puente la convierte a `wss://` automáticamente.
+Anota la URL HTTPS que muestra `gcloud run deploy`; el puente la convierte a `wss://` automáticamente.
 
 Cloud Run limita cada conexión WebSocket al timeout configurado (máximo 60 minutos), así que ambos clientes se reconectan automáticamente. La instancia permanece activa mientras haya conexiones WebSocket abiertas y puede generar cargos durante ese tiempo. `--max 1` mantiene en una instancia el estado de demostración, que se guarda en memoria. Consulta [la documentación de Cloud Run para WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets) antes de cambiar esta configuración.
 
@@ -59,7 +55,7 @@ git pull origin main
 sudo bash orangepi/install-service.sh
 ```
 
-El instalador crea el entorno Python, instala las dependencias, agrega `diego` al grupo serial `dialout`, pide que pegues el token de Secret Manager (la entrada queda oculta) y habilita el servicio al inicio del sistema. El token queda en `/etc/default/proyecto3-iot-bridge`, accesible solo por `root`. La URL de Cloud Run ya viene configurada; si cambia, edita ese archivo y reinicia el servicio.
+El instalador crea el entorno Python, instala las dependencias, agrega `diego` al grupo serial `dialout` y habilita el servicio al inicio del sistema. La URL de Cloud Run ya viene configurada en `/etc/default/proyecto3-iot-bridge`; si cambia, edita ese archivo y reinicia el servicio.
 
 Para comprobarlo o ver los mensajes:
 
@@ -70,17 +66,15 @@ sudo journalctl -u proyecto3-iot-bridge -f
 
 El servicio busca el Arduino automáticamente por USB y vuelve a intentar si se desconecta. Para iniciarlo manualmente sin `systemd`, ejecuta `cd orangepi`, `. .venv/bin/activate` y `python bridge.py`.
 
-Para obtener el token desde una terminal autenticada de Google Cloud, ejecuta `gcloud secrets versions access latest --secret=iot-device-token` y pégalo cuando lo solicite el instalador. No publiques ese valor en el repositorio.
-
 Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, prueba cada candidato y acepta el que transmite mensajes `STATE` del firmware. Así reconoce el Arduino aunque Linux le asigne otro nombre después de reiniciar. Si hay varios dispositivos seriales o quieres fijar uno, establece `SERIAL_PORT`, por ejemplo `export SERIAL_PORT='/dev/ttyACM0'`. El usuario que ejecuta Python debe tener permiso de acceso al puerto serial (normalmente pertenecer al grupo `dialout`; el nombre del grupo puede variar).
 
 ## Flujo de WebSocket
 
 - Navegador ↔ `wss://.../ws`: recibe eventos `state` y envía `command` para cambiar entre automático y manual.
-- Orange Pi ↔ `wss://.../ws`: autentica con el Bearer token, recibe los comandos y envía telemetría periódica.
+- Orange Pi ↔ `wss://.../ws?device=1`: recibe los comandos y envía telemetría periódica sin token.
 - Orange Pi ↔ Arduino: USB serial a 115200 baudios; el puente manda órdenes `A,umbral` o `M,ángulo,umbral`.
 - `GET /`: panel web; `GET /health`: verificación básica. También quedan disponibles las rutas REST `/api/state`, `/api/command` y `/api/telemetry` para diagnóstico.
 
 ## Alcance de la demo
 
-El servicio guarda el estado en memoria y se configura para una instancia. Esto simplifica la práctica, pero se pierde el estado cuando Cloud Run reinicia o elimina la instancia. Para una versión de producción se debe guardar el estado y los comandos en Firestore o una base de datos. El panel queda público con `--allow-unauthenticated`; cualquier persona con la URL puede cambiar el modo o mover la barrera. El token solo se configura en la Orange Pi y protege la conexión del dispositivo.
+El servicio guarda el estado en memoria y se configura para una instancia. Esto simplifica la práctica, pero se pierde el estado cuando Cloud Run reinicia o elimina la instancia. Para una versión de producción se debe guardar el estado y los comandos en Firestore o una base de datos. El panel y la conexión WebSocket del dispositivo son públicos: cualquiera con la URL puede cambiar el modo, mover el servo o enviar telemetría falsa.

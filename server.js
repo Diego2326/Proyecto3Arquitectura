@@ -159,8 +159,8 @@ server.on('upgrade', (request, socket, head) => {
   }
 
   const hasAuthorization = Boolean(request.headers.authorization);
-  const role = hasAuthorization ? 'device' : 'browser';
-  if (role === 'device' && !authorized(request)) {
+  const role = url.searchParams.get('device') === '1' || hasAuthorization ? 'device' : 'browser';
+  if (role === 'device' && hasAuthorization && !authorized(request)) {
     rejectUpgrade(socket, 401, 'Unauthorized');
     return;
   }

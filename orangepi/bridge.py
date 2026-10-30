@@ -18,7 +18,6 @@ CLOUD_RUN_URL = os.environ.get(
     "CLOUD_RUN_URL",
     "https://proyecto3arquitectura-990072178406.northamerica-south1.run.app",
 ).rstrip("/")
-DEVICE_TOKEN = os.environ.get("DEVICE_TOKEN", "")
 SERIAL_PORT = os.environ.get("SERIAL_PORT", "").strip()
 BAUD_RATE = int(os.environ.get("BAUD_RATE", "115200"))
 TELEMETRY_INTERVAL_SECONDS = float(os.environ.get("TELEMETRY_INTERVAL_SECONDS", "0.5"))
@@ -58,7 +57,7 @@ def websocket_url() -> str:
         raise SystemExit("CLOUD_RUN_URL debe ser una URL http(s) válida.")
     scheme = "wss" if parsed.scheme == "https" else "ws"
     path = f"{parsed.path.rstrip('/')}/ws"
-    return urlunparse((scheme, parsed.netloc, path, "", "", ""))
+    return urlunparse((scheme, parsed.netloc, path, "", "device=1", ""))
 
 
 def candidate_ports() -> list:
@@ -193,7 +192,6 @@ def websocket_worker(url: str) -> None:
     while True:
         socket = WebSocketApp(
             url,
-            header={"Authorization": f"Bearer {DEVICE_TOKEN}"},
             on_open=on_open,
             on_message=on_message,
             on_error=on_error,
@@ -238,8 +236,6 @@ def apply_serial_command(arduino, command: dict) -> None:
 
 
 def run_bridge() -> None:
-    if not DEVICE_TOKEN:
-        raise SystemExit("Configura DEVICE_TOKEN con el mismo secreto que usa Cloud Run.")
     url = websocket_url()
     threading.Thread(target=websocket_worker, args=(url,), daemon=True).start()
 
