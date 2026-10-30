@@ -6,9 +6,9 @@ El HC-SR04 mide la distancia a un objeto. En modo automático, el Arduino convie
 
 - `arduino/hc_sr04_barrier/hc_sr04_barrier.ino`: firmware para Arduino Uno R3.
 - `orangepi/bridge.py`: puente USB serial y cliente del servicio.
-- `cloudrun/server.js`: API HTTP para Cloud Run con Node.js.
-- `cloudrun/index.html`: panel web minimalista y adaptable a móvil.
-- `cloudrun/Dockerfile`: imagen para desplegar en Cloud Run.
+- `server.js`: API HTTP para Cloud Run con Node.js.
+- `index.html`: panel web minimalista y adaptable a móvil.
+- `package.json` y `Dockerfile`: configuración del proyecto y su imagen para Cloud Run.
 
 El servicio de Cloud Run usa Node.js 24 LTS y módulos integrados de Node, sin dependencias npm externas.
 
@@ -34,7 +34,7 @@ El umbral inicial es 15 cm. Arduino envía por USB `STATE,ángulo,distancia_cm,u
 
 ## Desplegar el servicio en Google Cloud Run
 
-Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura `gcloud` con ese proyecto. Genera un secreto compartido, por ejemplo con `openssl rand -hex 32`, y guárdalo en Secret Manager. Luego, desde la carpeta `cloudrun`, crea el secreto y despliega:
+Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura `gcloud` con ese proyecto. Genera un secreto compartido, por ejemplo con `openssl rand -hex 32`, y guárdalo en Secret Manager. Desde la raíz del repositorio, crea el secreto y despliega:
 
 ```sh
 printf '%s' 'PEGA_AQUI_EL_SECRETO' | gcloud secrets create iot-device-token --data-file=-
@@ -42,6 +42,8 @@ gcloud run deploy arduino-orange-pi --source . --region us-central1 \
   --allow-unauthenticated --max 1 --min 0 \
   --set-secrets DEVICE_TOKEN=iot-device-token:latest
 ```
+
+Para iniciar el servidor localmente, ejecuta `npm start` desde la raíz del repositorio y configura `DEVICE_TOKEN`.
 
 Si el secreto ya existe, crea una versión nueva con `gcloud secrets versions add iot-device-token --data-file=-`. Asegura que la cuenta de servicio de Cloud Run pueda leerlo (`Secret Manager Secret Accessor`). `--min 0` permite que Cloud Run escale a cero si no recibe solicitudes; el puente de la Orange Pi lo consulta periódicamente mientras está encendida. Anota la URL HTTPS que muestra `gcloud run deploy`.
 

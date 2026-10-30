@@ -3,6 +3,8 @@
 !.env.example
 .venv/
 venv/
+node_modules/
+npm-debug.log*
 __pycache__/
 *.py[cod]
 .DS_Store
