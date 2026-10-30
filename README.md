@@ -1,10 +1,10 @@
 # Control IoT con Arduino, Orange Pi y Cloud Run
 
-El HC-SR04 mide la distancia a un objeto. En modo automático, si está dentro del umbral configurado (15 cm inicialmente), el Arduino mueve el servo SG90 para abrir una barrera; cuando se aleja, la cierra. La Orange Pi Zero 2W retransmite la distancia y el estado a Cloud Run. Desde la página web se puede consultar la lectura, cambiar el umbral entre 5 y 100 cm y activar un override manual para forzar la apertura o el cierre. El modo manual permanece activo hasta volver al automático.
+El HC-SR04 mide la distancia a un objeto. En modo automático, el Arduino convierte la distancia en un ángulo proporcional: a 5 cm o menos apunta a 180°, y al llegar al umbral configurado (15 cm inicialmente) apunta a 0°. Entre esos puntos el ángulo cambia gradualmente, y el servo recorre la posición a pasos cortos. La Orange Pi Zero 2W retransmite la distancia y el estado a Cloud Run. En la web se puede cambiar el umbral y escoger manualmente cualquier ángulo de 0° a 180°; el override permanece activo hasta volver al automático.
 
 ## Archivos
 
-- `arduino/hc_sr04_barrier.ino`: firmware para Arduino Uno R3.
+- `arduino/hc_sr04_barrier/hc_sr04_barrier.ino`: firmware para Arduino Uno R3.
 - `orangepi/bridge.py`: puente USB serial y cliente del servicio.
 - `cloudrun/main.py`: API HTTP y página de control.
 - `cloudrun/Dockerfile`: imagen para desplegar en Cloud Run.
@@ -17,17 +17,17 @@ El HC-SR04 mide la distancia a un objeto. En modo automático, si está dentro d
 | HC-SR04 ECHO | D3 |
 | HC-SR04 VCC / GND | 5V / GND |
 | SG90 señal | D9 |
-| SG90 alimentación | 5 V externa, con GND común al Arduino |
+| SG90 alimentación | Fuente regulada externa de 5 V, con GND común al Arduino |
 
-No alimentes el SG90 desde el pin 5V del Arduino. Conecta Arduino al USB de la Orange Pi. En algunos clones el puerto serial podría aparecer como `/dev/ttyUSB0` en vez de `/dev/ttyACM0`.
+No alimentes el SG90 desde el pin 5V del Arduino. Aunque la Orange Pi tiene pines de 5 V, su alimentación principal recomendada es 5 V/2 A o 5 V/3 A para la propia placa; para evitar bajones cuando el servo arranca o cambia de posición, usa una fuente regulada separada para el SG90 y une su GND al GND del Arduino. Conecta Arduino al USB de la Orange Pi. En algunos clones el puerto serial podría aparecer como `/dev/ttyUSB0` en vez de `/dev/ttyACM0`.
 
 ## Subir el firmware
 
-1. Abre `arduino/hc_sr04_barrier.ino` en Arduino IDE.
+1. Abre `arduino/hc_sr04_barrier/hc_sr04_barrier.ino` en Arduino IDE.
 2. Selecciona **Arduino Uno** y el puerto conectado.
 3. Sube el programa. El monitor serial usa 115200 baudios.
 
-El umbral inicial es 15 cm. Arduino envía por USB `STATE,ángulo,distancia_cm,umbral_cm,modo`. Orange Pi manda `A,umbral_cm` para volver al automático o `M,ángulo,umbral_cm` para el modo manual (ángulo 0 cierra y 90 abre). Si el sensor no recibe eco, informa distancia `-1`; en automático la barrera queda cerrada. Los mensajes terminan en salto de línea.
+El umbral inicial es 15 cm. Arduino envía por USB `STATE,ángulo,distancia_cm,umbral_cm,modo`. Orange Pi manda `A,umbral_cm` para volver al automático o `M,ángulo,umbral_cm` para fijar cualquier ángulo manual entre 0 y 180. Si el sensor pierde uno o dos ecos, conserva la posición filtrada; después de tres lecturas sin eco, en automático apunta a 0°. Los mensajes terminan en salto de línea.
 
 ## Desplegar el servicio en Google Cloud Run
 
@@ -64,7 +64,7 @@ Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, pr
 
 - `GET /`: panel web para ver el estado y solicitar una posición.
 - `GET /api/state`: último estado observado por la Orange Pi.
-- `POST /api/command`: controla el modo desde la web. Automático: `{ "mode": "AUTO", "threshold_cm": 25 }`. Override manual abierto: `{ "mode": "MANUAL", "angle": 90 }`; cerrado: `{ "mode": "MANUAL", "angle": 0 }`.
+- `POST /api/command`: controla el modo desde la web. Automático: `{ "mode": "AUTO", "threshold_cm": 25 }`. Override manual: `{ "mode": "MANUAL", "angle": 123 }`.
 - `GET /api/command?since=REVISION`: comando pendiente para la Orange Pi.
 - `POST /api/telemetry`: telemetría de la Orange Pi, protegida con Bearer token.
 - `GET /health`: verificación básica del servicio.

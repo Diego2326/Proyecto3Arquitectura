@@ -83,7 +83,7 @@ def post_telemetry():
         mode = str(body["mode"]).upper()
     except (KeyError, TypeError, ValueError):
         return jsonify(error="Se requieren angle, distance_cm, threshold_cm y mode válidos."), 400
-    if (angle not in (0, 90) or not -1 <= distance_cm <= 500 or
+    if (not 0 <= angle <= 180 or not -1 <= distance_cm <= 500 or
             not 5 <= threshold_cm <= 100 or mode not in ("AUTO", "MANUAL")):
         return jsonify(error="Telemetría fuera de rango."), 400
 
@@ -112,8 +112,8 @@ def set_command():
         return jsonify(error="El umbral debe estar entre 5 y 100 cm."), 400
     if mode not in ("AUTO", "MANUAL"):
         return jsonify(error="mode debe ser AUTO o MANUAL."), 400
-    if mode == "MANUAL" and angle not in (0, 90):
-        return jsonify(error="En modo manual angle debe ser 0 (cerrar) o 90 (abrir)."), 400
+    if mode == "MANUAL" and not 0 <= angle <= 180:
+        return jsonify(error="En modo manual angle debe estar entre 0 y 180 grados."), 400
     if mode == "AUTO":
         angle = 0
 
@@ -164,9 +164,8 @@ DASHBOARD = r"""<!doctype html>
     input[type=range] { width: 100%; margin: 20px 0 8px; accent-color: #2563eb; }
     .range-ends { display: flex; justify-content: space-between; color: #64748b; font-size: .85rem; }
     button { margin-top: 20px; width: 100%; padding: 13px 18px; border: 0; border-radius: 12px; color: white; background: #2563eb; font: inherit; font-weight: 750; cursor: pointer; }
-    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .button-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
     .button-row button { margin-top: 10px; }
-    .button-row .wide { grid-column: 1 / -1; }
     button.secondary { background: #334155; }
     button:disabled { opacity: .6; cursor: wait; }
     #message { min-height: 1.4em; color: #536987; font-size: .9rem; margin: 12px 0 0; }
@@ -179,23 +178,25 @@ DASHBOARD = r"""<!doctype html>
   <section class="card">
     <div class="eyebrow">Proyecto IoT · Arduino + Orange Pi + Cloud Run</div>
     <h1>Barrera de proximidad</h1>
-    <p class="sub">El HC-SR04 mide la distancia y el SG90 abre la barrera cuando detecta un objeto dentro del umbral.</p>
+    <p class="sub">En automático, el HC-SR04 traduce la distancia a una posición proporcional del SG90. En manual puedes elegir cualquier ángulo.</p>
     <div id="status" class="status"><span class="dot"></span><span id="statusText">Conectando…</span></div>
     <div class="metrics">
       <div class="metric"><small>Distancia</small><strong id="distance">—</strong></div>
-      <div class="metric"><small>Barrera</small><strong id="barrierState">—</strong></div>
+      <div class="metric"><small>Ángulo servo</small><strong id="servoAngle">—°</strong></div>
       <div class="metric"><small>Modo</small><strong id="modeState">Automático</strong></div>
     </div>
     <p id="appliedThreshold" class="sub">Umbral aplicado: 15 cm</p>
     <label for="threshold"><span>Umbral para modo automático</span><output id="thresholdOutput">15 cm</output></label>
     <input id="threshold" type="range" min="5" max="100" value="15">
     <div class="range-ends"><span>5 cm</span><span>100 cm</span></div>
+    <label for="manualAngle"><span>Posición manual</span><output id="manualAngleOutput">0°</output></label>
+    <input id="manualAngle" type="range" min="0" max="180" value="0">
+    <div class="range-ends"><span>0°</span><span>180°</span></div>
     <div class="button-row">
-      <button id="autoButton" class="wide" type="button">Aplicar umbral y activar automático</button>
-      <button id="openButton" class="secondary" type="button">Forzar apertura</button>
-      <button id="closeButton" class="secondary" type="button">Forzar cierre</button>
+      <button id="autoButton" type="button">Aplicar umbral y activar automático</button>
+      <button id="manualButton" class="secondary" type="button">Forzar ángulo manual</button>
     </div>
-    <p class="sub">En modo manual, el HC-SR04 sigue midiendo, pero el servo mantiene la posición elegida hasta volver al modo automático.</p>
+    <p class="sub">El modo manual mantiene el ángulo elegido aunque cambie la distancia, hasta que vuelvas al automático.</p>
     <p id="message" role="status"></p>
   </section>
   <footer>Arduino mide y controla el servo; la Orange Pi sincroniza los datos con este servicio.</footer>
@@ -203,16 +204,22 @@ DASHBOARD = r"""<!doctype html>
 <script>
   const slider = document.querySelector('#threshold');
   const output = document.querySelector('#thresholdOutput');
+  const manualSlider = document.querySelector('#manualAngle');
+  const manualOutput = document.querySelector('#manualAngleOutput');
   const controlButtons = [
     document.querySelector('#autoButton'),
-    document.querySelector('#openButton'),
-    document.querySelector('#closeButton')
+    document.querySelector('#manualButton')
   ];
   const message = document.querySelector('#message');
   let thresholdEdited = false;
+  let manualAngleEdited = false;
   slider.addEventListener('input', () => {
     thresholdEdited = true;
     output.value = `${slider.value} cm`;
+  });
+  manualSlider.addEventListener('input', () => {
+    manualAngleEdited = true;
+    manualOutput.value = `${manualSlider.value}°`;
   });
   async function sendCommand(mode, angle = 0) {
     controlButtons.forEach(button => button.disabled = true);
@@ -225,23 +232,23 @@ DASHBOARD = r"""<!doctype html>
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Error al enviar');
       if (mode === 'AUTO') thresholdEdited = false;
+      if (mode === 'MANUAL') manualAngleEdited = false;
       message.textContent = mode === 'AUTO'
         ? `Modo automático activado con umbral de ${result.threshold_cm} cm.`
-        : `Modo manual: barrera ${angle === 90 ? 'abierta' : 'cerrada'}.`;
+        : `Modo manual: servo a ${angle}°.`;
     } catch (error) {
       message.textContent = `No se pudo enviar: ${error.message}`;
     } finally { controlButtons.forEach(button => button.disabled = false); }
   }
   controlButtons[0].addEventListener('click', () => sendCommand('AUTO'));
-  controlButtons[1].addEventListener('click', () => sendCommand('MANUAL', 90));
-  controlButtons[2].addEventListener('click', () => sendCommand('MANUAL', 0));
+  controlButtons[1].addEventListener('click', () => sendCommand('MANUAL', Number(manualSlider.value)));
   async function refresh() {
     try {
       const response = await fetch('/api/state', { cache: 'no-store' });
       const s = await response.json();
       document.querySelector('#distance').textContent = s.distance_cm < 0 || s.distance_cm === null
         ? 'Sin eco' : `${s.distance_cm} cm`;
-      document.querySelector('#barrierState').textContent = s.angle > 0 ? 'Abierta' : 'Cerrada';
+      document.querySelector('#servoAngle').textContent = `${s.angle}°`;
       document.querySelector('#modeState').textContent = s.mode === 'MANUAL' ? 'Manual' : 'Automático';
       document.querySelector('#appliedThreshold').textContent = `Umbral aplicado: ${s.threshold_cm} cm`;
       document.querySelector('#status').className = `status ${s.online ? 'online' : 'offline'}`;
@@ -249,6 +256,10 @@ DASHBOARD = r"""<!doctype html>
       if (!thresholdEdited) {
         slider.value = s.desired_threshold_cm;
         output.value = `${s.desired_threshold_cm} cm`;
+      }
+      if (!manualAngleEdited) {
+        manualSlider.value = s.desired_angle;
+        manualOutput.value = `${s.desired_angle}°`;
       }
     } catch (_) {
       document.querySelector('#status').className = 'status offline';

@@ -26,7 +26,7 @@ def parse_arduino_line(line: bytes) -> Optional[dict]:
             return None
         angle, distance_cm, threshold_cm = map(int, fields[1:4])
         mode = fields[4]
-        if angle not in (0, 90) or not -1 <= distance_cm <= 500:
+        if not 0 <= angle <= 180 or not -1 <= distance_cm <= 500:
             return None
         if not 5 <= threshold_cm <= 100 or mode not in ("AUTO", "MANUAL"):
             return None
@@ -155,12 +155,11 @@ def run_bridge() -> None:
                                     last_revision = revision
                                     last_command = command_values
                                     print(f"Modo automático: umbral {threshold_cm} cm (rev. {revision})")
-                                elif mode == "MANUAL" and angle in (0, 90) and 5 <= threshold_cm <= 100:
+                                elif mode == "MANUAL" and 0 <= angle <= 180 and 5 <= threshold_cm <= 100:
                                     arduino.write(f"M,{angle},{threshold_cm}\n".encode("ascii"))
                                     last_revision = revision
                                     last_command = command_values
-                                    action = "abrir" if angle == 90 else "cerrar"
-                                    print(f"Modo manual: {action} barrera (rev. {revision})")
+                                    print(f"Modo manual: objetivo {angle}° (rev. {revision})")
                         except (requests.RequestException, ValueError, KeyError) as error:
                             print(f"No se pudo consultar el comando: {error}")
                         next_poll_at = now + POLL_INTERVAL_SECONDS
