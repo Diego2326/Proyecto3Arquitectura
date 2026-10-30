@@ -49,22 +49,28 @@ Si el secreto ya existe, crea una versión nueva con `gcloud secrets versions ad
 
 Cloud Run limita cada conexión WebSocket al timeout configurado (máximo 60 minutos), así que ambos clientes se reconectan automáticamente. La instancia permanece activa mientras haya conexiones WebSocket abiertas y puede generar cargos durante ese tiempo. `--max 1` mantiene en una instancia el estado de demostración, que se guarda en memoria. Consulta [la documentación de Cloud Run para WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets) antes de cambiar esta configuración.
 
-## Preparar la Orange Pi Zero 2W
+## Iniciar el puente automáticamente al arrancar
 
-Instala Python 3 y `pip`. Copia o clona este proyecto en la Orange Pi y ejecuta:
+Clona o actualiza este repositorio en la Orange Pi. Desde una terminal de `diego`, ejecuta:
 
 ```sh
-cd orangepi
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-export DEVICE_TOKEN='EL_MISMO_SECRETO_DE_SECRET_MANAGER'
-python bridge.py
+cd ~/Proyecto3Arquitectura
+git pull origin main
+sudo bash orangepi/install-service.sh
 ```
 
-El puente ya usa como destino predeterminado `https://proyecto3arquitectura-990072178406.northamerica-south1.run.app`. Si despliegas el servicio con otra URL, configúrala en `CLOUD_RUN_URL` antes de iniciar el script.
+El instalador crea el entorno Python, instala las dependencias, agrega `diego` al grupo serial `dialout`, pide que pegues el token de Secret Manager (la entrada queda oculta) y habilita el servicio al inicio del sistema. El token queda en `/etc/default/proyecto3-iot-bridge`, accesible solo por `root`. La URL de Cloud Run ya viene configurada; si cambia, edita ese archivo y reinicia el servicio.
 
-Para obtener el valor del token desde una terminal autenticada de Google Cloud, ejecuta `gcloud secrets versions access latest --secret=iot-device-token` y asígnalo a `DEVICE_TOKEN` en la Orange Pi. No publiques ese valor en el repositorio.
+Para comprobarlo o ver los mensajes:
+
+```sh
+sudo systemctl status proyecto3-iot-bridge
+sudo journalctl -u proyecto3-iot-bridge -f
+```
+
+El servicio busca el Arduino automáticamente por USB y vuelve a intentar si se desconecta. Para iniciarlo manualmente sin `systemd`, ejecuta `cd orangepi`, `. .venv/bin/activate` y `python bridge.py`.
+
+Para obtener el token desde una terminal autenticada de Google Cloud, ejecuta `gcloud secrets versions access latest --secret=iot-device-token` y pégalo cuando lo solicite el instalador. No publiques ese valor en el repositorio.
 
 Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, prueba cada candidato y acepta el que transmite mensajes `STATE` del firmware. Así reconoce el Arduino aunque Linux le asigne otro nombre después de reiniciar. Si hay varios dispositivos seriales o quieres fijar uno, establece `SERIAL_PORT`, por ejemplo `export SERIAL_PORT='/dev/ttyACM0'`. El usuario que ejecuta Python debe tener permiso de acceso al puerto serial (normalmente pertenecer al grupo `dialout`; el nombre del grupo puede variar).
 
