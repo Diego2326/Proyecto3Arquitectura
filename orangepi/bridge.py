@@ -14,7 +14,10 @@ from serial.tools import list_ports
 from websocket import WebSocketApp
 
 
-CLOUD_RUN_URL = os.environ.get("CLOUD_RUN_URL", "").rstrip("/")
+CLOUD_RUN_URL = os.environ.get(
+    "CLOUD_RUN_URL",
+    "https://proyecto3arquitectura-990072178406.northamerica-south1.run.app",
+).rstrip("/")
 DEVICE_TOKEN = os.environ.get("DEVICE_TOKEN", "")
 SERIAL_PORT = os.environ.get("SERIAL_PORT", "").strip()
 BAUD_RATE = int(os.environ.get("BAUD_RATE", "115200"))

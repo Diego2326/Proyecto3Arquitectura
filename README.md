@@ -38,7 +38,7 @@ Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura 
 
 ```sh
 printf '%s' 'PEGA_AQUI_EL_SECRETO' | gcloud secrets create iot-device-token --data-file=-
-gcloud run deploy arduino-orange-pi --source . --region us-central1 \
+gcloud run deploy proyecto3arquitectura --source . --region northamerica-south1 \
   --allow-unauthenticated --max 1 --min 0 --timeout=3600 \
   --set-secrets DEVICE_TOKEN=iot-device-token:latest
 ```
@@ -58,10 +58,11 @@ cd orangepi
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-export CLOUD_RUN_URL='https://TU-SERVICIO-xxxxx-uc.a.run.app'
 export DEVICE_TOKEN='EL_MISMO_SECRETO_DE_SECRET_MANAGER'
 python bridge.py
 ```
+
+El puente ya usa como destino predeterminado `https://proyecto3arquitectura-990072178406.northamerica-south1.run.app`. Si despliegas el servicio con otra URL, configúrala en `CLOUD_RUN_URL` antes de iniciar el script.
 
 Para obtener el valor del token desde una terminal autenticada de Google Cloud, ejecuta `gcloud secrets versions access latest --secret=iot-device-token` y asígnalo a `DEVICE_TOKEN` en la Orange Pi. No publiques ese valor en el repositorio.
 
