@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f1">
+  <title>NODO · Control IoT</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18231f;
+      --muted: #77827c;
+      --line: #e5eae4;
+      --paper: #ffffff;
+      --canvas: #f3f5f1;
+      --green: #236b50;
+      --green-dark: #174d39;
+      --mint: #e8f3eb;
+      --amber: #b5742e;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(ellipse at 12% 0%, #e7eee6 0, transparent 36rem), var(--canvas);
+    }
+    button, input { font: inherit; }
+    .shell { width: min(100% - 40px, 1040px); margin: 0 auto; padding: 30px 0 40px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 54px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; color: white; background: var(--green-dark); }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-name { font-size: .92rem; font-weight: 760; letter-spacing: .025em; }
+    .brand-caption { margin-top: 2px; color: var(--muted); font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; }
+    .connection { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; background: #ffffffb8; color: var(--muted); font-size: .78rem; }
+    .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: #aab3ad; }
+    .connection.online { color: var(--green-dark); border-color: #d5e7da; background: #f4faf5; }
+    .connection.online .connection-dot { background: #42a56f; box-shadow: 0 0 0 3px #42a56f22; }
+    .connection.offline .connection-dot { background: #cd795d; }
+    .intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .eyebrow { color: var(--green); font-size: .72rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 10px 0 10px; font-size: clamp(2.35rem, 5.4vw, 4.3rem); font-weight: 620; letter-spacing: -.065em; line-height: .98; }
+    .intro-copy { max-width: 500px; margin: 0; color: #64716a; font-size: 1rem; line-height: 1.65; }
+    .device-tag { flex: 0 0 auto; margin-bottom: 5px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 12px; background: #ffffffa6; color: #66716b; font-size: .78rem; }
+    .device-tag strong { color: var(--ink); font-weight: 700; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+    .metric, .panel { border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: 0 8px 26px #28372d08; }
+    .metric { min-height: 137px; padding: 20px 22px; }
+    .metric-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: .82rem; }
+    .metric-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: #f2f5f1; color: var(--green); font-size: .92rem; }
+    .metric-value { margin-top: 18px; font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 620; letter-spacing: -.055em; }
+    .metric-unit { margin-left: 4px; color: #89938c; font-size: .95rem; font-weight: 500; letter-spacing: 0; }
+    .mode-value { display: flex; align-items: center; gap: 9px; }
+    .mode-mark { width: 9px; height: 9px; border-radius: 3px; background: #43a06e; }
+    .mode-value.manual .mode-mark { background: #9273c1; }
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .panel { padding: 24px; }
+    .panel-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .panel-title { margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em; }
+    .panel-copy { margin: 6px 0 0; color: var(--muted); font-size: .83rem; line-height: 1.5; }
+    .panel-index { color: #a0aaa3; font-size: .72rem; font-weight: 700; letter-spacing: .1em; }
+    .control-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .84rem; font-weight: 650; }
+    output { color: var(--green); font-size: 1rem; font-variant-numeric: tabular-nums; }
+    input[type="range"] { width: 100%; height: 5px; margin: 18px 0 9px; border-radius: 999px; background: #e5ebe5; accent-color: var(--green); cursor: pointer; }
+    .range-scale { display: flex; justify-content: space-between; color: #9aa39c; font-size: .72rem; font-variant-numeric: tabular-nums; }
+    .apply-button { width: 100%; min-height: 45px; margin-top: 23px; padding: 0 16px; border: 0; border-radius: 11px; background: var(--green-dark); color: white; font-size: .86rem; font-weight: 700; cursor: pointer; transition: transform .16s ease, background .16s ease, opacity .16s ease; }
+    .apply-button:hover { transform: translateY(-1px); background: #216b4c; }
+    .apply-button.secondary { border: 1px solid #dce6dd; background: var(--mint); color: var(--green-dark); }
+    .apply-button.secondary:hover { background: #dcefe1; }
+    .apply-button:disabled { cursor: wait; opacity: .6; transform: none; }
+    .feedback { min-height: 22px; margin: 16px 2px 0; color: var(--muted); font-size: .8rem; }
+    .footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 18px; color: #97a19a; font-size: .72rem; }
+    .footer span:last-child { text-align: right; }
+    @media (max-width: 720px) {
+      .shell { width: min(100% - 28px, 560px); padding-top: 20px; }
+      .topbar { margin-bottom: 42px; }
+      .intro { display: block; }
+      .device-tag { display: inline-block; margin-top: 17px; }
+      .metrics { gap: 9px; }
+      .metric { min-height: 119px; padding: 15px; }
+      .metric-label { font-size: .72rem; }
+      .metric-icon { width: 24px; height: 24px; }
+      .panels { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 430px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:last-child { grid-column: 1 / -1; min-height: 94px; }
+      .metric:last-child .metric-value { margin-top: 12px; }
+      .panel { padding: 20px; }
+      .footer { display: block; line-height: 1.6; }
+      .footer span:last-child { display: block; margin-top: 4px; text-align: left; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 14.5c2.1-5.2 4.8-7.8 8-7.8s5.9 2.6 8 7.8M7.2 16.2c1.3-3.1 2.9-4.7 4.8-4.7s3.5 1.6 4.8 4.7M11 18a1 1 0 1 0 2 0 1 1 0 0 0-2 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </div>
+        <div><div class="brand-name">NODO</div><div class="brand-caption">Control IoT</div></div>
+      </div>
+      <div id="connection" class="connection offline" aria-live="polite"><span class="connection-dot"></span><span id="connectionText">Conectando</span></div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <div class="eyebrow">Arduino · Orange Pi · Cloud Run</div>
+        <h1>Control de<br>proximidad.</h1>
+        <p class="intro-copy">Lectura ultrasónica en tiempo real y control preciso de posición. Alterna entre seguimiento automático y ajuste manual.</p>
+      </div>
+      <div class="device-tag"><strong>HC-SR04</strong><span> &nbsp;→&nbsp; </span><strong>SG90</strong></div>
+    </section>
+
+    <section class="metrics" aria-label="Estado del dispositivo">
+      <article class="metric">
+        <div class="metric-label"><span>Distancia detectada</span><span class="metric-icon" aria-hidden="true">⌁</span></div>
+        <div class="metric-value"><span id="distanceValue">—</span><span class="metric-unit" id="distanceUnit"></span></div>
+      </article>
+      <article class="metric">
+        <div class="metric-label"><span>Posición del servo</span><span class="metric-icon" aria-hidden="true">↗</span></div>
+        <div class="metric-value"><span id="angleValue">—</span><span class="metric-unit">°</span></div>
+      </article>
+      <article class="metric">
+        <div class="metric-label"><span>Modo activo</span><span class="metric-icon" aria-hidden="true">◉</span></div>
+        <div class="metric-value mode-value" id="modeValue"><span class="mode-mark"></span><span id="modeText">Automático</span></div>
+      </article>
+    </section>
+
+    <section class="panels" aria-label="Controles">
+      <article class="panel">
+        <div class="panel-top">
+          <div><h2 class="panel-title">Seguimiento automático</h2><p class="panel-copy">Ajusta el límite de distancia. El ángulo cambia proporcionalmente.</p></div>
+          <span class="panel-index">01</span>
+        </div>
+        <label class="control-label" for="threshold"><span>Umbral de alcance</span><output id="thresholdOutput" for="threshold">15 cm</output></label>
+        <input id="threshold" type="range" min="5" max="100" value="15">
+        <div class="range-scale"><span>5 cm</span><span>100 cm</span></div>
+        <button class="apply-button" id="autoButton" type="button">Activar automático</button>
+      </article>
+
+      <article class="panel">
+        <div class="panel-top">
+          <div><h2 class="panel-title">Posición manual</h2><p class="panel-copy">Fija el servo en cualquier ángulo entre 0° y 180°.</p></div>
+          <span class="panel-index">02</span>
+        </div>
+        <label class="control-label" for="manualAngle"><span>Ángulo objetivo</span><output id="manualOutput" for="manualAngle">0°</output></label>
+        <input id="manualAngle" type="range" min="0" max="180" value="0">
+        <div class="range-scale"><span>0°</span><span>90°</span><span>180°</span></div>
+        <button class="apply-button secondary" id="manualButton" type="button">Aplicar posición manual</button>
+      </article>
+    </section>
+
+    <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+    <footer class="footer"><span>La lectura se actualiza automáticamente.</span><span>En manual, el sensor sigue midiendo sin cambiar la posición.</span></footer>
+  </main>
+
+  <script>
+    const threshold = document.querySelector('#threshold');
+    const thresholdOutput = document.querySelector('#thresholdOutput');
+    const manualAngle = document.querySelector('#manualAngle');
+    const manualOutput = document.querySelector('#manualOutput');
+    const autoButton = document.querySelector('#autoButton');
+    const manualButton = document.querySelector('#manualButton');
+    const feedback = document.querySelector('#feedback');
+    let thresholdEdited = false;
+    let angleEdited = false;
+
+    threshold.addEventListener('input', () => {
+      thresholdEdited = true;
+      thresholdOutput.value = `${threshold.value} cm`;
+    });
+    manualAngle.addEventListener('input', () => {
+      angleEdited = true;
+      manualOutput.value = `${manualAngle.value}°`;
+    });
+
+    async function sendCommand(mode) {
+      const button = mode === 'AUTO' ? autoButton : manualButton;
+      button.disabled = true;
+      feedback.textContent = 'Enviando comando…';
+      const body = {
+        mode,
+        threshold_cm: Number(threshold.value),
+      };
+      if (mode === 'MANUAL') body.angle = Number(manualAngle.value);
+
+      try {
+        const response = await fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudo enviar el comando.');
+        if (mode === 'AUTO') thresholdEdited = false;
+        else angleEdited = false;
+        feedback.textContent = mode === 'AUTO'
+          ? `Automático activo · umbral ${result.threshold_cm} cm`
+          : `Posición manual solicitada · ${result.angle}°`;
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    autoButton.addEventListener('click', () => sendCommand('AUTO'));
+    manualButton.addEventListener('click', () => sendCommand('MANUAL'));
+
+    async function refreshState() {
+      try {
+        const response = await fetch('/api/state', { cache: 'no-store' });
+        if (!response.ok) throw new Error('No se pudo consultar el estado.');
+        const state = await response.json();
+        const hasDistance = state.distance_cm !== null && state.distance_cm >= 0;
+        document.querySelector('#distanceValue').textContent = hasDistance ? state.distance_cm : '—';
+        document.querySelector('#distanceUnit').textContent = hasDistance ? 'cm' : 'Sin eco';
+        document.querySelector('#angleValue').textContent = state.angle;
+        document.querySelector('#modeText').textContent = state.mode === 'MANUAL' ? 'Manual' : 'Automático';
+        document.querySelector('#modeValue').classList.toggle('manual', state.mode === 'MANUAL');
+
+        const connection = document.querySelector('#connection');
+        connection.classList.toggle('online', Boolean(state.online));
+        connection.classList.toggle('offline', !state.online);
+        document.querySelector('#connectionText').textContent = state.online ? 'Dispositivo en línea' : 'Sin conexión';
+
+        if (!thresholdEdited) {
+          threshold.value = state.desired_threshold_cm;
+          thresholdOutput.value = `${state.desired_threshold_cm} cm`;
+        }
+        if (!angleEdited) {
+          manualAngle.value = state.desired_angle;
+          manualOutput.value = `${state.desired_angle}°`;
+        }
+      } catch {
+        const connection = document.querySelector('#connection');
+        connection.classList.remove('online');
+        connection.classList.add('offline');
+        document.querySelector('#connectionText').textContent = 'Servicio no disponible';
+      }
+    }
+
+    refreshState();
+    setInterval(refreshState, 1000);
+  </script>
+</body>
+</html>

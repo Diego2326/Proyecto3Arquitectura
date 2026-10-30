@@ -6,8 +6,11 @@ El HC-SR04 mide la distancia a un objeto. En modo automático, el Arduino convie
 
 - `arduino/hc_sr04_barrier/hc_sr04_barrier.ino`: firmware para Arduino Uno R3.
 - `orangepi/bridge.py`: puente USB serial y cliente del servicio.
-- `cloudrun/main.py`: API HTTP y página de control.
+- `cloudrun/server.js`: API HTTP para Cloud Run con Node.js.
+- `cloudrun/index.html`: panel web minimalista y adaptable a móvil.
 - `cloudrun/Dockerfile`: imagen para desplegar en Cloud Run.
+
+El servicio de Cloud Run usa Node.js 24 LTS y módulos integrados de Node, sin dependencias npm externas.
 
 ## Conexiones
 
@@ -62,7 +65,7 @@ Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, pr
 
 ## Flujo y rutas
 
-- `GET /`: panel web para ver el estado y solicitar una posición.
+- `GET /`: panel web para ver el estado y controlar el servo.
 - `GET /api/state`: último estado observado por la Orange Pi.
 - `POST /api/command`: controla el modo desde la web. Automático: `{ "mode": "AUTO", "threshold_cm": 25 }`. Override manual: `{ "mode": "MANUAL", "angle": 123 }`.
 - `GET /api/command?since=REVISION`: comando pendiente para la Orange Pi.

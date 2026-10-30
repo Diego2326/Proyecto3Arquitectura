@@ -1,12 +1,10 @@
-FROM python:3.12-slim
+FROM node:24-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+ENV NODE_ENV=production
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py .
 
-# Un solo worker mantiene el estado en memoria consistente dentro de la instancia.
-CMD exec gunicorn --bind :${PORT:-8080} --workers 1 --threads 8 --timeout 0 main:app
+COPY package.json ./
+COPY server.js index.html ./
+
+EXPOSE 8080
+CMD ["npm", "start"]
