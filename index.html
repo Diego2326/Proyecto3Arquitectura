@@ -159,7 +159,7 @@
     </section>
 
     <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
-    <footer class="footer"><span>La lectura se actualiza automáticamente.</span><span>En manual, el sensor sigue midiendo sin cambiar la posición.</span></footer>
+    <footer class="footer"><span>Lectura y control en tiempo real por WebSocket.</span><span>En manual, el sensor sigue midiendo sin cambiar la posición.</span></footer>
   </main>
 
   <script>
@@ -182,74 +182,95 @@
       manualOutput.value = `${manualAngle.value}°`;
     });
 
-    async function sendCommand(mode) {
-      const button = mode === 'AUTO' ? autoButton : manualButton;
-      button.disabled = true;
-      feedback.textContent = 'Enviando comando…';
+    let socket = null;
+    let reconnectDelay = 700;
+    let pendingMode = null;
+
+    function setConnection(connected, text) {
+      const connection = document.querySelector('#connection');
+      connection.classList.toggle('online', connected);
+      connection.classList.toggle('offline', !connected);
+      document.querySelector('#connectionText').textContent = text;
+    }
+
+    function sendCommand(mode) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        feedback.textContent = 'Esperando conexión con Cloud Run…';
+        return;
+      }
+      pendingMode = mode;
       const body = {
         mode,
         threshold_cm: Number(threshold.value),
       };
       if (mode === 'MANUAL') body.angle = Number(manualAngle.value);
-
-      try {
-        const response = await fetch('/api/command', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'No se pudo enviar el comando.');
-        if (mode === 'AUTO') thresholdEdited = false;
-        else angleEdited = false;
-        feedback.textContent = mode === 'AUTO'
-          ? `Automático activo · umbral ${result.threshold_cm} cm`
-          : `Posición manual solicitada · ${result.angle}°`;
-      } catch (error) {
-        feedback.textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
+      socket.send(JSON.stringify({ type: 'command', data: body }));
+      feedback.textContent = 'Comando enviado al servicio…';
     }
 
     autoButton.addEventListener('click', () => sendCommand('AUTO'));
     manualButton.addEventListener('click', () => sendCommand('MANUAL'));
 
-    async function refreshState() {
-      try {
-        const response = await fetch('/api/state', { cache: 'no-store' });
-        if (!response.ok) throw new Error('No se pudo consultar el estado.');
-        const state = await response.json();
-        const hasDistance = state.distance_cm !== null && state.distance_cm >= 0;
-        document.querySelector('#distanceValue').textContent = hasDistance ? state.distance_cm : '—';
-        document.querySelector('#distanceUnit').textContent = hasDistance ? 'cm' : 'Sin eco';
-        document.querySelector('#angleValue').textContent = state.angle;
-        document.querySelector('#modeText').textContent = state.mode === 'MANUAL' ? 'Manual' : 'Automático';
-        document.querySelector('#modeValue').classList.toggle('manual', state.mode === 'MANUAL');
+    function renderState(state) {
+      const hasDistance = state.distance_cm !== null && state.distance_cm >= 0;
+      document.querySelector('#distanceValue').textContent = hasDistance ? state.distance_cm : '—';
+      document.querySelector('#distanceUnit').textContent = hasDistance ? 'cm' : 'Sin eco';
+      document.querySelector('#angleValue').textContent = state.angle;
+      document.querySelector('#modeText').textContent = state.mode === 'MANUAL' ? 'Manual' : 'Automático';
+      document.querySelector('#modeValue').classList.toggle('manual', state.mode === 'MANUAL');
+      setConnection(Boolean(state.online), state.online ? 'Arduino en línea' : 'Esperando Arduino');
 
-        const connection = document.querySelector('#connection');
-        connection.classList.toggle('online', Boolean(state.online));
-        connection.classList.toggle('offline', !state.online);
-        document.querySelector('#connectionText').textContent = state.online ? 'Dispositivo en línea' : 'Sin conexión';
-
-        if (!thresholdEdited) {
-          threshold.value = state.desired_threshold_cm;
-          thresholdOutput.value = `${state.desired_threshold_cm} cm`;
-        }
-        if (!angleEdited) {
-          manualAngle.value = state.desired_angle;
-          manualOutput.value = `${state.desired_angle}°`;
-        }
-      } catch {
-        const connection = document.querySelector('#connection');
-        connection.classList.remove('online');
-        connection.classList.add('offline');
-        document.querySelector('#connectionText').textContent = 'Servicio no disponible';
+      if (!thresholdEdited) {
+        threshold.value = state.desired_threshold_cm;
+        thresholdOutput.value = `${state.desired_threshold_cm} cm`;
+      }
+      if (!angleEdited) {
+        manualAngle.value = state.desired_angle;
+        manualOutput.value = `${state.desired_angle}°`;
       }
     }
 
-    refreshState();
-    setInterval(refreshState, 1000);
+    function connectWebSocket() {
+      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const connection = new WebSocket(`${scheme}//${location.host}/ws`);
+      socket = connection;
+
+      connection.addEventListener('open', () => {
+        reconnectDelay = 700;
+        setConnection(true, 'Servicio conectado');
+      });
+      connection.addEventListener('message', (event) => {
+        let message;
+        try { message = JSON.parse(event.data); }
+        catch { return; }
+
+        if (message.type === 'state') renderState(message.data);
+        if (message.type === 'ack') {
+          const result = message.data;
+          if (pendingMode === 'AUTO') {
+            thresholdEdited = false;
+            feedback.textContent = `Automático activo · umbral ${result.threshold_cm} cm`;
+          } else {
+            angleEdited = false;
+            feedback.textContent = `Posición manual solicitada · ${result.angle}°`;
+          }
+          pendingMode = null;
+        }
+        if (message.type === 'error') {
+          feedback.textContent = message.message || 'No se pudo aplicar el comando.';
+          pendingMode = null;
+        }
+      });
+      connection.addEventListener('close', () => {
+        if (socket === connection) socket = null;
+        setConnection(false, 'Reconectando…');
+        setTimeout(connectWebSocket, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 1.7, 5000);
+      });
+      connection.addEventListener('error', () => connection.close());
+    }
+
+    connectWebSocket();
   </script>
 </body>
 </html>

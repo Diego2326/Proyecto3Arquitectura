@@ -1,16 +1,16 @@
 # Control IoT con Arduino, Orange Pi y Cloud Run
 
-El HC-SR04 mide la distancia a un objeto. En modo automático, el Arduino convierte la distancia en un ángulo proporcional: a 5 cm o menos apunta a 180°, y al llegar al umbral configurado (15 cm inicialmente) apunta a 0°. Entre esos puntos el ángulo cambia gradualmente, y el servo recorre la posición a pasos cortos. La Orange Pi Zero 2W retransmite la distancia y el estado a Cloud Run. En la web se puede cambiar el umbral y escoger manualmente cualquier ángulo de 0° a 180°; el override permanece activo hasta volver al automático.
+El HC-SR04 mide la distancia a un objeto. En modo automático, el Arduino convierte la distancia en un ángulo proporcional: a 5 cm o menos apunta a 180°, y al llegar al umbral configurado (15 cm inicialmente) apunta a 0°. Entre esos puntos el ángulo cambia gradualmente, y el servo recorre la posición a pasos cortos. La Orange Pi Zero 2W retransmite el estado a Cloud Run por WebSocket seguro (`wss://`), y el navegador recibe actualizaciones y envía controles por ese mismo protocolo. En la web se puede cambiar el umbral y escoger manualmente cualquier ángulo de 0° a 180°; el override permanece activo hasta volver al automático.
 
 ## Archivos
 
 - `arduino/hc_sr04_barrier/hc_sr04_barrier.ino`: firmware para Arduino Uno R3.
-- `orangepi/bridge.py`: puente USB serial y cliente del servicio.
-- `server.js`: API HTTP para Cloud Run con Node.js.
+- `orangepi/bridge.py`: puente USB serial y cliente WebSocket del servicio.
+- `server.js`: servicio HTTP y WebSocket para Cloud Run con Node.js.
 - `index.html`: panel web minimalista y adaptable a móvil.
 - `package.json` y `Dockerfile`: configuración del proyecto y su imagen para Cloud Run.
 
-El servicio de Cloud Run usa Node.js 24 LTS y módulos integrados de Node, sin dependencias npm externas.
+El servicio de Cloud Run usa Node.js 24 LTS y el paquete `ws` para WebSocket. La Orange Pi usa `websocket-client` y reconecta si se corta la red o Cloud Run cierra una sesión.
 
 ## Conexiones
 
@@ -39,17 +39,19 @@ Activa Cloud Run y Artifact Registry en el proyecto de Google Cloud y configura 
 ```sh
 printf '%s' 'PEGA_AQUI_EL_SECRETO' | gcloud secrets create iot-device-token --data-file=-
 gcloud run deploy arduino-orange-pi --source . --region us-central1 \
-  --allow-unauthenticated --max 1 --min 0 \
+  --allow-unauthenticated --max 1 --min 0 --timeout=3600 \
   --set-secrets DEVICE_TOKEN=iot-device-token:latest
 ```
 
 Para iniciar el servidor localmente, ejecuta `npm start` desde la raíz del repositorio y configura `DEVICE_TOKEN`.
 
-Si el secreto ya existe, crea una versión nueva con `gcloud secrets versions add iot-device-token --data-file=-`. Asegura que la cuenta de servicio de Cloud Run pueda leerlo (`Secret Manager Secret Accessor`). `--min 0` permite que Cloud Run escale a cero si no recibe solicitudes; el puente de la Orange Pi lo consulta periódicamente mientras está encendida. Anota la URL HTTPS que muestra `gcloud run deploy`.
+Si el secreto ya existe, crea una versión nueva con `gcloud secrets versions add iot-device-token --data-file=-`. Asegura que la cuenta de servicio de Cloud Run pueda leerlo (`Secret Manager Secret Accessor`). Anota la URL HTTPS que muestra `gcloud run deploy`; el puente la convierte a `wss://` automáticamente.
+
+Cloud Run limita cada conexión WebSocket al timeout configurado (máximo 60 minutos), así que ambos clientes se reconectan automáticamente. La instancia permanece activa mientras haya conexiones WebSocket abiertas y puede generar cargos durante ese tiempo. `--max 1` mantiene en una instancia el estado de demostración, que se guarda en memoria. Consulta [la documentación de Cloud Run para WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets) antes de cambiar esta configuración.
 
 ## Preparar la Orange Pi Zero 2W
 
-Instala Python 3, `pip` y las herramientas de compilación de `pyserial` si la distribución las requiere. Copia o clona este proyecto en la Orange Pi y ejecuta:
+Instala Python 3 y `pip`. Copia o clona este proyecto en la Orange Pi y ejecuta:
 
 ```sh
 cd orangepi
@@ -65,15 +67,13 @@ Para obtener el valor del token desde una terminal autenticada de Google Cloud, 
 
 Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, prueba cada candidato y acepta el que transmite mensajes `STATE` del firmware. Así reconoce el Arduino aunque Linux le asigne otro nombre después de reiniciar. Si hay varios dispositivos seriales o quieres fijar uno, establece `SERIAL_PORT`, por ejemplo `export SERIAL_PORT='/dev/ttyACM0'`. El usuario que ejecuta Python debe tener permiso de acceso al puerto serial (normalmente pertenecer al grupo `dialout`; el nombre del grupo puede variar).
 
-## Flujo y rutas
+## Flujo de WebSocket
 
-- `GET /`: panel web para ver el estado y controlar el servo.
-- `GET /api/state`: último estado observado por la Orange Pi.
-- `POST /api/command`: controla el modo desde la web. Automático: `{ "mode": "AUTO", "threshold_cm": 25 }`. Override manual: `{ "mode": "MANUAL", "angle": 123 }`.
-- `GET /api/command?since=REVISION`: comando pendiente para la Orange Pi.
-- `POST /api/telemetry`: telemetría de la Orange Pi, protegida con Bearer token.
-- `GET /health`: verificación básica del servicio.
+- Navegador ↔ `wss://.../ws`: recibe eventos `state` y envía `command` para cambiar entre automático y manual.
+- Orange Pi ↔ `wss://.../ws`: autentica con el Bearer token, recibe los comandos y envía telemetría periódica.
+- Orange Pi ↔ Arduino: USB serial a 115200 baudios; el puente manda órdenes `A,umbral` o `M,ángulo,umbral`.
+- `GET /`: panel web; `GET /health`: verificación básica. También quedan disponibles las rutas REST `/api/state`, `/api/command` y `/api/telemetry` para diagnóstico.
 
 ## Alcance de la demo
 
-La API guarda el estado en memoria y está configurada para una instancia. Esto simplifica la práctica, pero se pierde el estado cuando Cloud Run reinicia o elimina la instancia. Para una versión de producción se debe guardar el estado y los comandos en Firestore o una base de datos. El panel queda público con `--allow-unauthenticated`; cualquier persona con la URL puede cambiar el modo o mover la barrera. El token solo se configura en la Orange Pi y protege sus llamadas de dispositivo.
+El servicio guarda el estado en memoria y se configura para una instancia. Esto simplifica la práctica, pero se pierde el estado cuando Cloud Run reinicia o elimina la instancia. Para una versión de producción se debe guardar el estado y los comandos en Firestore o una base de datos. El panel queda público con `--allow-unauthenticated`; cualquier persona con la URL puede cambiar el modo o mover la barrera. El token solo se configura en la Orange Pi y protege la conexión del dispositivo.
