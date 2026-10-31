@@ -45,6 +45,10 @@ printf 'CLOUD_RUN_URL=%s\n' "${DEFAULT_CLOUD_RUN_URL}" > "${ENV_FILE}"
 chown root:root "${ENV_FILE}"
 chmod 0600 "${ENV_FILE}"
 
+# Si quedó una máscara de una instalación previa, quítala antes de escribir
+# la unidad (de otro modo la ruta puede apuntar a /dev/null).
+systemctl unmask "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+
 cat > "${SERVICE_FILE}" <<UNIT
 [Unit]
 Description=Arduino and Orange Pi WebSocket bridge
@@ -69,6 +73,8 @@ UNIT
 chmod 0644 "${SERVICE_FILE}"
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}.service"
+systemctl is-enabled --quiet "${SERVICE_NAME}.service"
+systemctl is-active --quiet "${SERVICE_NAME}.service"
 
 echo "Servicio instalado y habilitado: ${SERVICE_NAME}.service"
 echo "Ver estado:  sudo systemctl status ${SERVICE_NAME}"

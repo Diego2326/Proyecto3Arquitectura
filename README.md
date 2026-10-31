@@ -64,6 +64,8 @@ sudo systemctl status proyecto3-iot-bridge
 sudo journalctl -u proyecto3-iot-bridge -f
 ```
 
+Si `systemctl` indica `masked`, vuelve a ejecutar `sudo bash orangepi/install-service.sh`; el instalador deshace la máscara y vuelve a habilitar el servicio. Un reinicio normal no lo vuelve a enmascarar.
+
 El servicio busca el Arduino automáticamente por USB y vuelve a intentar si se desconecta. Para iniciarlo manualmente sin `systemd`, ejecuta `cd orangepi`, `. .venv/bin/activate` y `python bridge.py`.
 
 Por defecto el script busca puertos USB tipo `/dev/ttyACM*` y `/dev/ttyUSB*`, prueba cada candidato y acepta el que transmite mensajes `STATE` del firmware. Así reconoce el Arduino aunque Linux le asigne otro nombre después de reiniciar. Si hay varios dispositivos seriales o quieres fijar uno, establece `SERIAL_PORT`, por ejemplo `export SERIAL_PORT='/dev/ttyACM0'`. El usuario que ejecuta Python debe tener permiso de acceso al puerto serial (normalmente pertenecer al grupo `dialout`; el nombre del grupo puede variar).
